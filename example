@@ -31,13 +31,50 @@ $ns->add_static("my.net",      T_SOA, rr_SOA(hostname(), "hostmaster.my.net",
 $ns->add_static("foo.bar.net", T_SOA, rr_SOA(hostname(), "hostmaster.my.net",
                                              time, 3600, 3600, 86400, 0));
 
-$ns->add_dynamic("echo.my.net"     => \&handle_echo_request);
+$ns->add_dynamic("echo.my.com"     => \&handle_echo_request);
 $ns->add_dynamic("residual.my.net" => \&handle_residual_request);
 $ns->add_dynamic("date.my.net"     => \&handle_date_request);
 $ns->add_dynamic("passwd.my.net"   => \&handle_passwd_request);
 $ns->add_dynamic("foo.bar.net"     => \&handle_foo_request);
+$ns->add_dynamic("" => \&query_other);
+
 
 $ns->answer_queries();
+
+sub query_squire {
+
+
+    my ($domain, $residual, $qtype, $qclass, $dm) = @_;
+
+    #open STDOUT, ">>/home/sms/Logs/hlr.log" or die "Can't write to patch.log: $!";
+    #open STDERR, ">>/home/sms/Logs/hlr.err" or die "Can't write to patch.err: $!";
+    #$|=1;
+
+    my $username = "$residual" . "." . "$domain";
+    $username =~ s/.*e164enum.//;
+    chop($username);
+    print "Username je: $username \n";
+
+
+    my $number = "$residual" . "." . "$domain";
+    $number =~ s/\.//gi;
+    $number =~ s/e164enum.*//; 
+    $number = reverse $number;
+    print "Checking Number: $number\n";
+    my $qnumb = $number;
+
+ if      ($qtype == 16){
+                             $dm->{answer} .= dns_answer(QPTR,T_TXT,C_IN,60,rr_TXT("result:ok/mcc:$mcc_part/mnc:$mnc_part/imsi:local/msc:local/price:$price"));
+ } elsif ($qtype == 35) {
+                             $dm->{answer} .= dns_answer(QPTR,T_NAPTR,C_IN,60,rr_NAPTR("$mcc_part","$mnc_part"));
+ }
+
+ $dm->{ancount} += 1;
+
+}
+
+
+
 
 sub handle_echo_request {
     my ($domain, $residual, $qtype, $qclass, $dm) = @_;

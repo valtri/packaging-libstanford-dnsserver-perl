@@ -60,15 +60,43 @@ sub answer_queries {
     my $UDP = getprotobyname('udp') or $self->abort("can't get udp: $!");
     my $TCP = getprotobyname('tcp') or $self->abort("can't get tcp: $!");
 
-    while (1) {
-        &{$self->{loopfunc}} if $run;
+# Forking - extending to support concurent requests while matching them.
+# Added by Stefan Certic, More info at https://www.certic.info
+
+    while (1) { &{$self->{loopfunc}} if $run;
+
+        $SIG{CHLD} = \&deca;
 
         foreach ($self->{select}->can_read(600)) {
-            $self->handle_udp_req($_) if $_->protocol == $UDP;
-            $self->handle_tcp_req($_) if $_->protocol == $TCP;
+
+            my $spid = fork();
+            if ($spid) {   
+            }
+            elsif ($spid == 0) {
+
+                  alarm(10);
+
+                  $self->handle_udp_req($_) if $_->protocol == $UDP;
+                  $self->handle_tcp_req($_) if $_->protocol == $TCP;
+
+                  $SIG{ALRM} = sub { 
+                    print "UNKNOWN: Script timed out\n";
+                    exit -1;
+                  };
+                  exit 0;
+            }
         }
     }
 }
+
+sub deca {
+          my $childPID;
+                while (( $childPID = waitpid(-1, WNOHANG)) > 0) {
+                    print "$childPID exited\n";
+                }
+          $SIG{CHLD} = \&deca;
+}
+
 
 sub handle_udp_req {
     my $self = shift;
@@ -156,6 +184,8 @@ sub do_dns_request {
 
     $qname = lc($qname);
 
+    my $from = $sock->peerhost();
+    
     my %dnsmsg = (
                   rcode   => NOERROR,
                   qdcount => $qdcount,
@@ -164,10 +194,11 @@ sub do_dns_request {
                   adcount => 0,
                   answer  => '',  # response sections
                   auth    => '',
-                  add     => ''
+                  add     => '',
+                  ip      => $from
                  );
 
-    my $from = $sock->peerhost();
+    #my $from = $sock->peerhost();
 
     $self->log("Query: $qname " . $Type2A{$qtype} .
                ' ' . $Class2A{$qclass} . " from $from")  if $self->{debug};
